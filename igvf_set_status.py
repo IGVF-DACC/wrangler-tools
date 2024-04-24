@@ -142,7 +142,7 @@ class Connection():
                 return
             except Exception:
                 self.debug_logger.debug(
-                    'Faile to setup connetion from Keypair file {}.'
+                    'Failed to setup connection from Keypair file {}.'
                     'Will try environment variables'.format(path)
                 )
 
@@ -177,7 +177,7 @@ class Connection():
             return
         except Exception:
             self.debug_logger.error(
-                'Fail to setup connection with '
+                'Failed to setup connection with '
                 'Key: {} and Keypair file:{}'.format(key, keyfile)
             )
             raise
@@ -188,7 +188,7 @@ class Connection():
             requests.get(url, auth=self.auth).raise_for_status()
         except requests.exceptions.RequestException:
             self.debug_logger.error(
-                'Fail to get object {}. '
+                'Failed to get object {}. '
                 'Please check your permission.'.format(rec_id)
             )
             raise
