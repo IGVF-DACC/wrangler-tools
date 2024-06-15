@@ -19,7 +19,7 @@ parser = argparse.ArgumentParser(
 parser.add_argument('-a', '--accession', help='accession of one analysis set')
 
 # will add this if useful
-# parser.add_argument('-i', '--infile', help='A file containing a list of measurement set accessions.')
+parser.add_argument('-i', '--infile', help='A file containing a list of measurement set accessions.')
 
 # api connection setting from environment variables.
 # could add alternative ways
@@ -31,15 +31,16 @@ url = 'https://api.data.igvf.org/'
 # set the properties/columns here:
 # any column with all rows = None will be dropped in final tables
 basic_props = ['@id', 'accession', 'aliases', 'status', 'audit']
-link_obj_props = {'input_file_sets': ['measurement_sets', 'auxiliary-sets', 'samples', 'donors', 'library_construction_platform', 'assay_term', 'documents'],
-                  'auxiliary-set': ['samples', 'donors', 'library_construction_platform', 'documents'],
+link_obj_props = {'input_file_sets': ['measurement_sets', 'auxiliary_sets', 'samples', 'donors', 'library_construction_platform', 'assay_term', 'documents'],
+                  'auxiliary_sets': ['samples', 'donors', 'library_construction_platform', 'documents'],
                   'samples': ['sample_terms', 'biomarkers', 'modifications', 'sorted_from', 'donors', 'construct_library_sets', 'treatments', 'originated_from', 'sources', 'multiplexed_samples', 'demultiplexed_from', 'barcode_sample_map', 'targeted_sample_term', 'cell_fate_change_treatments', 'cell_fate_change_protocol'],
-                  'donor': ['phenotypic_features', 'documents', 'sources'],
-                  'modification': ['tagged_protein', 'documents', 'sources'],
-                  'treamtment': ['documents', 'sources'],
+                  'donors': ['phenotypic_features', 'documents', 'sources'],
+                  'modifications': ['tagged_protein', 'documents', 'sources'],
+                  'treatments': ['documents', 'sources'],
                   'files': ['derived_from']
-                  # curated-sets?
                   }
+## didn't use it for types other than input_file_sets, samples, files
+# need to go further
 
 # excluding linkTo props here
 output_props = {'modifications': ['summary'],
@@ -172,11 +173,24 @@ def output_df(dfs):
 
 def main():
     args = parser.parse_args()
-    data_accession = 'analysis-sets/' + args.accession
+    input_file_sets_ids = []
+    outfile_prefix = ''
+    if args.accession:
+        outfile_prefix = args.accession
+        data_accession = 'analysis-sets/' + args.accession
+        fileset_json = requests.get(url+data_accession, auth=auth).json()
+        input_file_sets_ids = [f['@id'] for f in fileset_json['input_file_sets']]
+    elif args.infile:
+        outfile_prefix = args.infile.split('.')[0]
+        with open(args.infile, 'r') as f:
+            for row in f:
+                # add more format check here
+                if row.startswith('/'):
+                    input_file_sets_ids.append(row.strip().split('\t')[0])
+    # if no files in input, add error output
+
     df_all_out = {}
 
-    fileset_json = requests.get(url+data_accession, auth=auth).json()
-    input_file_sets_ids = [f['@id'] for f in fileset_json['input_file_sets']]
     print('Getting input_file_sets properties...')
     input_file_sets_dict = get_props_from_ids(
         input_file_sets_ids, basic_props + ['summary'], 'input_file_set')
@@ -225,60 +239,61 @@ def main():
             [df_0[['input_file_set.' + i for i in basic_props]], df_3])
         df_all_out['input_file_sets.samples'] = df_out
 
-    # samples under the analysis-set
-    if fileset_json.get('samples') is not None:
-        print('Getting analysis-set samples properties...')
-        samples_ids = [f['@id'] for f in fileset_json['samples']]
-        samples_dict = get_props_from_ids(
-            samples_ids, basic_props + output_props['samples'], 'analysis_set.samples')
-        df_0 = pd.DataFrame(samples_dict)
+    if args.accession:
+        # samples under the analysis-set
+        if fileset_json.get('samples') is not None:
+            print('Getting analysis-set samples properties...')
+            samples_ids = [f['@id'] for f in fileset_json['samples']]
+            samples_dict = get_props_from_ids(
+                samples_ids, basic_props + output_props['samples'], 'analysis_set.samples')
+            df_0 = pd.DataFrame(samples_dict)
 
-        print('Getting analysis-set samples linkTo obj ids...')
-        samples_link_ids_dict = get_link_prop_ids_from_ids(
-            samples_ids, link_obj_props['samples'], 'analysis_set.samples')
-        samples_link_objs_dict = {}
-        print('Getting analysis-set samples linkTo obj properties...')
-        for k in samples_link_ids_dict.keys():
-            if any(v is not None for v in samples_link_ids_dict[k]):
-                obj_type = k.split('.')[-2]
-                props_list = basic_props if output_props.get(
-                    obj_type) is None else basic_props + output_props[obj_type]
-                props_dict = get_props_from_ids(
-                    samples_link_ids_dict[k], props_list, k.replace('.@id', ''))
-                samples_link_objs_dict.update(props_dict)
-        df_4 = pd.DataFrame(samples_link_objs_dict)
+            print('Getting analysis-set samples linkTo obj ids...')
+            samples_link_ids_dict = get_link_prop_ids_from_ids(
+                samples_ids, link_obj_props['samples'], 'analysis_set.samples')
+            samples_link_objs_dict = {}
+            print('Getting analysis-set samples linkTo obj properties...')
+            for k in samples_link_ids_dict.keys():
+                if any(v is not None for v in samples_link_ids_dict[k]):
+                    obj_type = k.split('.')[-2]
+                    props_list = basic_props if output_props.get(
+                        obj_type) is None else basic_props + output_props[obj_type]
+                    props_dict = get_props_from_ids(
+                        samples_link_ids_dict[k], props_list, k.replace('.@id', ''))
+                    samples_link_objs_dict.update(props_dict)
+            df_4 = pd.DataFrame(samples_link_objs_dict)
 
-        df_out = output_df([df_0, df_4])
-        df_all_out['analysis_set.samples'] = df_out
+            df_out = output_df([df_0, df_4])
+            df_all_out['analysis_set.samples'] = df_out
 
-    # files derived from table
-    # file ids from analysis_set -> files -> derived_from
-    if fileset_json.get('files') is not None and fileset_json['files']:
-        print('Getting analysis-set files properties...')
-        files_ids = [f['@id'] for f in fileset_json['files']]
-        files_dict = get_props_from_ids(
-            files_ids, basic_props + output_props['files'], 'analysis_set.files')
-        df_5 = pd.DataFrame(files_dict)
+        # files derived from table
+        # file ids from analysis_set -> files -> derived_from
+        if fileset_json.get('files') is not None and fileset_json['files']:
+            print('Getting analysis-set files properties...')
+            files_ids = [f['@id'] for f in fileset_json['files']]
+            files_dict = get_props_from_ids(
+                files_ids, basic_props + output_props['files'], 'analysis_set.files')
+            df_5 = pd.DataFrame(files_dict)
 
-        df_out = output_df([df_5])
-        df_all_out['analysis_set.files'] = df_out
+            df_out = output_df([df_5])
+            df_all_out['analysis_set.files'] = df_out
 
-        # if any file has derived_from files -> put those derived_from files in a separate table
-        files_link_ids_dict = get_link_prop_ids_from_ids(
-            files_ids, link_obj_props['files'], 'analysis_set.files')
-        for f_id, d_files_ids in zip(files_ids, files_link_ids_dict['analysis_set.files.derived_from.@id']):
-            if d_files_ids is not None:
-                print('Getting derived_from files table for file ' + f_id + '...')
-                derived_from_dict = get_props_from_ids(d_files_ids.split(
-                    ', '), basic_props + output_props['files'], f_id.split('/')[-2] + '.derived_from')
-                df = pd.DataFrame(derived_from_dict)
+            # if any file has derived_from files -> put those derived_from files in a separate table
+            files_link_ids_dict = get_link_prop_ids_from_ids(
+                files_ids, link_obj_props['files'], 'analysis_set.files')
+            for f_id, d_files_ids in zip(files_ids, files_link_ids_dict['analysis_set.files.derived_from.@id']):
+                if d_files_ids is not None:
+                    print('Getting derived_from files table for file ' + f_id + '...')
+                    derived_from_dict = get_props_from_ids(d_files_ids.split(
+                        ', '), basic_props + output_props['files'], f_id.split('/')[-2] + '.derived_from')
+                    df = pd.DataFrame(derived_from_dict)
 
-                df_out = output_df([df])
-                df_all_out[f_id.split('/')[-2] + '.derived_from'] = df_out
+                    df_out = output_df([df])
+                    df_all_out[f_id.split('/')[-2] + '.derived_from'] = df_out
 
     # write dataframes to excel
-    print('Writing to excel tables: ' + args.accession + '_metadata.xlsx')
-    with pd.ExcelWriter(args.accession + '_metadata.xlsx') as writer:
+    print('Writing to excel tables: ' + outfile_prefix + '_metadata.xlsx')
+    with pd.ExcelWriter(outfile_prefix + '_metadata.xlsx') as writer:
         for k in sorted(df_all_out.keys()):
             df_all_out[k].to_excel(writer, sheet_name=k,
                                    index=False, engine='xlsxwriter')
