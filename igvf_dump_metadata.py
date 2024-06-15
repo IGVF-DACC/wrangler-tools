@@ -18,7 +18,6 @@ parser = argparse.ArgumentParser(
 
 parser.add_argument('-a', '--accession', help='accession of one analysis set')
 
-# will add this if useful
 parser.add_argument('-i', '--infile', help='A file containing a list of measurement set accessions.')
 
 # api connection setting from environment variables.
@@ -40,7 +39,7 @@ link_obj_props = {'input_file_sets': ['measurement_sets', 'auxiliary_sets', 'sam
                   'files': ['derived_from']
                   }
 ## didn't use it for types other than input_file_sets, samples, files
-# need to go further
+# need to rethink how to iterate over all linkTo props
 
 # excluding linkTo props here
 output_props = {'modifications': ['summary'],
@@ -51,7 +50,8 @@ output_props = {'modifications': ['summary'],
                 'assay_term': ['term_name'],
                 # how far should sorted_from samples go?
                 'sorted_from': ['construct_library_sets'],
-                'files': ['file_format', 'file_size', 'content_type']
+                'files': ['file_format', 'file_size', 'content_type', 'upload_status'],
+                'input_file_sets': ['dbxrefs', 'protocols', 'multiome_size', 'summary']
                 }
 
 
@@ -193,7 +193,7 @@ def main():
 
     print('Getting input_file_sets properties...')
     input_file_sets_dict = get_props_from_ids(
-        input_file_sets_ids, basic_props + ['summary'], 'input_file_set')
+        input_file_sets_ids, basic_props + output_props['input_file_sets'], 'input_file_set')
     df_0 = pd.DataFrame(input_file_sets_dict)
 
     print('Getting input_file_sets linkTo obj ids...')
