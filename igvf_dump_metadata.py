@@ -8,6 +8,7 @@ from collections import defaultdict
 # prerequisite libraries:
 # pip install pandas
 # pip install openpyxl
+# pip install jinja2
 
 # You will need to put API credentials in the environment variables: IGVF_API_KEY & IGVF_SECRET_KEY.
 
@@ -187,8 +188,8 @@ def output_df(dfs):
 
     # conditional formatting on any column of audit & status
     df_out = df_out.style\
-        .applymap(audit_color, subset=[i for i in list(df_out.columns) if i.endswith('audit')])\
-        .applymap(status_color, subset=[i for i in list(df_out.columns) if i.endswith('status')])
+        .map(audit_color, subset=[i for i in list(df_out.columns) if i.endswith('audit')])\
+        .map(status_color, subset=[i for i in list(df_out.columns) if i.endswith('status')])
 
     return df_out
 
