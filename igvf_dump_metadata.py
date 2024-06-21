@@ -18,7 +18,8 @@ parser = argparse.ArgumentParser(
 
 parser.add_argument('-a', '--accession', help='accession of one analysis set')
 
-parser.add_argument('-i', '--infile', help='A file containing a list of measurement set accessions.')
+parser.add_argument(
+    '-i', '--infile', help='A file containing a list of measurement set accessions.')
 
 # api connection setting from environment variables.
 # could add alternative ways
@@ -30,15 +31,26 @@ url = 'https://api.data.igvf.org/'
 # set the properties/columns here:
 # any column with all rows = None will be dropped in final tables
 basic_props = ['@id', 'accession', 'aliases', 'status', 'audit']
-link_obj_props = {'input_file_sets': ['measurement_sets', 'auxiliary_sets', 'samples', 'donors', 'library_construction_platform', 'assay_term', 'documents'],
-                  'auxiliary_sets': ['samples', 'donors', 'library_construction_platform', 'documents'],
-                  'samples': ['sample_terms', 'biomarkers', 'modifications', 'sorted_from', 'donors', 'construct_library_sets', 'treatments', 'originated_from', 'sources', 'multiplexed_samples', 'demultiplexed_from', 'barcode_sample_map', 'targeted_sample_term', 'cell_fate_change_treatments', 'cell_fate_change_protocol'],
+# construct_library_set maybe should be in final table, even no entry has it
+# input file-set: 'control_file_sets', 'control_for', 'related_multiome_datasets'
+# control_file_sets <-> control_for can be a separate table
+# related_multiome_datasets: sample -> file_sets -> grouped into related_multiome_datasets
+# sample: part_of
+# is there other file-set mapppings beside measurment & auxiliary sets?
+# sample is linkTo to file-set, donors are calculated -> can removed donors from input file-set
+# write out the path explicity here (by layer)
+link_obj_props = {'input_file_sets': ['measurement_sets', 'auxiliary_sets', 'control_for', 'control_file_sets', 'samples', 'library_construction_platform', 'assay_term', 'documents'],
+                  'auxiliary_sets': ['samples', 'library_construction_platform', 'documents'],
+                  'measurement_sets': ['assay_term', 'samples', 'library_construction_platform', 'documents'],
+                  'samples': ['sample_terms', 'biomarkers', 'modifications', 'sorted_from', 'part_of', 'donors', 'construct_library_sets', 'treatments', 'originated_from', 'sources', 'multiplexed_samples', 'demultiplexed_from', 'barcode_sample_map', 'targeted_sample_term', 'cell_fate_change_treatments', 'cell_fate_change_protocol'],
                   'donors': ['phenotypic_features', 'documents', 'sources'],
                   'modifications': ['tagged_protein', 'documents', 'sources'],
                   'treatments': ['documents', 'sources'],
                   'files': ['derived_from']
                   }
-## didn't use it for types other than input_file_sets, samples, files
+
+# didn't go further for samples in sorted_from or part_of for their linkTo objs
+# didn't use it for types other than input_file_sets, samples, files
 # need to rethink how to iterate over all linkTo props
 
 # excluding linkTo props here
@@ -50,6 +62,7 @@ output_props = {'modifications': ['summary'],
                 'assay_term': ['term_name'],
                 # how far should sorted_from samples go?
                 'sorted_from': ['construct_library_sets'],
+                # should 'part_of' sample output more properties?
                 'files': ['file_format', 'file_size', 'content_type', 'upload_status'],
                 'input_file_sets': ['dbxrefs', 'protocols', 'multiome_size', 'summary']
                 }
@@ -110,7 +123,7 @@ def get_link_prop_ids_from_ids(obj_ids, prop_fields, prefix):
         obj_json = requests.get(url+obj_id, auth=auth).json()
         for p in prop_fields:
             props_key = '.'.join([prefix, p, '@id'])
-            if obj_json.get(p) is None:
+            if not obj_json.get(p):  # None or empty array
                 props_dict[props_key].append(None)
             elif isinstance(obj_json.get(p), list):
                 if isinstance(obj_json.get(p)[0], dict):
@@ -128,6 +141,27 @@ def get_link_prop_ids_from_ids(obj_ids, prop_fields, prefix):
 
     return props_dict
 
+
+def get_link_objs_df(query_ids, query_link_obj_props, props_prefix):
+    df = pd.DataFrame()
+    print('Getting ' + props_prefix + ' linkTo obj ids...')
+    query_link_ids_dict = get_link_prop_ids_from_ids(
+        query_ids, query_link_obj_props, props_prefix)
+    print('Getting ' + props_prefix + ' linkTo obj properties...')
+    query_link_objs_dict = {}
+    for k in query_link_ids_dict.keys():
+        # skip those linkto objs if all input file sets have None in that field
+        if any(v is not None for v in query_link_ids_dict[k]):
+            obj_type = k.split('.')[-2]
+            props_list = basic_props if output_props.get(
+                obj_type) is None else basic_props + output_props[obj_type]
+            props_dict = get_props_from_ids(
+                query_link_ids_dict[k], props_list, k.replace('.@id', ''))
+            # could output to a separate dataframe here for any linkTo obj
+            query_link_objs_dict.update(props_dict)
+
+    df = pd.DataFrame(query_link_objs_dict)
+    return df
 # set conditional formatting on cell colors
 # this could be optional from args
 
@@ -179,7 +213,8 @@ def main():
         outfile_prefix = args.accession
         data_accession = 'analysis-sets/' + args.accession
         fileset_json = requests.get(url+data_accession, auth=auth).json()
-        input_file_sets_ids = [f['@id'] for f in fileset_json['input_file_sets']]
+        input_file_sets_ids = [f['@id']
+                               for f in fileset_json['input_file_sets']]
     elif args.infile:
         outfile_prefix = args.infile.split('.')[0]
         with open(args.infile, 'r') as f:
@@ -196,51 +231,27 @@ def main():
         input_file_sets_ids, basic_props + output_props['input_file_sets'], 'input_file_set')
     df_0 = pd.DataFrame(input_file_sets_dict)
 
-    print('Getting input_file_sets linkTo obj ids...')
-    # looking for the same set of linkTo props defined in link_obj_props for all input_file_sets
-    # TODO: might need to adjust for curated-sets
-    input_file_sets_link_ids_dict = get_link_prop_ids_from_ids(
+    df_link = get_link_objs_df(
         input_file_sets_ids, link_obj_props['input_file_sets'], 'input_file_set')
-    df_1 = pd.DataFrame(input_file_sets_link_ids_dict)
 
-    print('Getting input_file_sets linkTo obj properties...')
-    input_file_sets_link_objs_dict = {}
-    for k in input_file_sets_link_ids_dict.keys():  # e.g. k = donors
-        # skip those linkto objs if all input file sets have None in that field
-        if any(v is not None for v in input_file_sets_link_ids_dict[k]):
-            obj_type = k.split('.')[-2]
-            props_list = basic_props if output_props.get(
-                obj_type) is None else basic_props + output_props[obj_type]
-            props_dict = get_props_from_ids(
-                input_file_sets_link_ids_dict[k], props_list, k.replace('.@id', ''))
-            # could output to a separate dataframe here for any linkTo obj
-            input_file_sets_link_objs_dict.update(props_dict)
-    df_2 = pd.DataFrame(input_file_sets_link_objs_dict)
-
-    df_out = output_df([df_0, df_1, df_2])
+    df_out = output_df([df_0, df_link])
     df_all_out['input_file_sets'] = df_out
 
-    if any(v is not None for v in input_file_sets_link_ids_dict['input_file_set.samples.@id']):
-        print('Getting input_file_sets samples properties...')
-        samples_link_ids_dict = get_link_prop_ids_from_ids(
-            input_file_sets_link_ids_dict['input_file_set.samples.@id'], link_obj_props['samples'], 'input_file_set.samples')
-        samples_link_objs_dict = {}
-        for k in samples_link_ids_dict.keys():
-            if any(v is not None for v in samples_link_ids_dict[k]):
-                obj_type = k.split('.')[-2]
-                props_list = basic_props if output_props.get(
-                    obj_type) is None else basic_props + output_props[obj_type]
-                props_dict = get_props_from_ids(
-                    samples_link_ids_dict[k], props_list, k.replace('.@id', ''))
-                samples_link_objs_dict.update(props_dict)
-        df_3 = pd.DataFrame(samples_link_objs_dict)
+    #this is redundant in get_link_objs_df
+    input_file_sets_link_ids_dict = get_link_prop_ids_from_ids(
+        input_file_sets_ids, link_obj_props['input_file_sets'], 'input_file_set')
+    samples_ids = input_file_sets_link_ids_dict['input_file_set.samples.@id']
+    if any(v is not None for v in samples_ids):
+        # samples from input file-sets
+        df_sample_link = get_link_objs_df(
+            samples_ids, link_obj_props['samples'], 'input_file_set.samples')
 
         df_out = output_df(
-            [df_0[['input_file_set.' + i for i in basic_props]], df_3])
+            [df_0[['input_file_set.' + i for i in basic_props]], df_sample_link])
         df_all_out['input_file_sets.samples'] = df_out
 
     if args.accession:
-        # samples under the analysis-set
+        # samples directly from the analysis-set
         if fileset_json.get('samples') is not None:
             print('Getting analysis-set samples properties...')
             samples_ids = [f['@id'] for f in fileset_json['samples']]
@@ -248,22 +259,10 @@ def main():
                 samples_ids, basic_props + output_props['samples'], 'analysis_set.samples')
             df_0 = pd.DataFrame(samples_dict)
 
-            print('Getting analysis-set samples linkTo obj ids...')
-            samples_link_ids_dict = get_link_prop_ids_from_ids(
+            df_link = get_link_objs_df(
                 samples_ids, link_obj_props['samples'], 'analysis_set.samples')
-            samples_link_objs_dict = {}
-            print('Getting analysis-set samples linkTo obj properties...')
-            for k in samples_link_ids_dict.keys():
-                if any(v is not None for v in samples_link_ids_dict[k]):
-                    obj_type = k.split('.')[-2]
-                    props_list = basic_props if output_props.get(
-                        obj_type) is None else basic_props + output_props[obj_type]
-                    props_dict = get_props_from_ids(
-                        samples_link_ids_dict[k], props_list, k.replace('.@id', ''))
-                    samples_link_objs_dict.update(props_dict)
-            df_4 = pd.DataFrame(samples_link_objs_dict)
 
-            df_out = output_df([df_0, df_4])
+            df_out = output_df([df_0, df_link])
             df_all_out['analysis_set.samples'] = df_out
 
         # files derived from table
@@ -295,6 +294,8 @@ def main():
     print('Writing to excel tables: ' + outfile_prefix + '_metadata.xlsx')
     with pd.ExcelWriter(outfile_prefix + '_metadata.xlsx') as writer:
         for k in sorted(df_all_out.keys()):
+            print(k, len(list(df_all_out[k].columns)))
+            print(df_all_out[k].columns)
             df_all_out[k].to_excel(writer, sheet_name=k,
                                    index=False, engine='xlsxwriter')
 
