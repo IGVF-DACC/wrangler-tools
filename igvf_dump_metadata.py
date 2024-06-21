@@ -30,28 +30,16 @@ url = 'https://api.data.igvf.org/'
 
 # set the properties/columns here:
 # any column with all rows = None will be dropped in final tables
+# can add 'summary' to basic_props when it's available for all objs
 basic_props = ['@id', 'accession', 'aliases', 'status', 'audit']
-# construct_library_set maybe should be in final table, even no entry has it
-# input file-set: 'control_file_sets', 'control_for', 'related_multiome_datasets'
-# control_file_sets <-> control_for can be a separate table
-# related_multiome_datasets: sample -> file_sets -> grouped into related_multiome_datasets
-# sample: part_of
-# is there other file-set mapppings beside measurment & auxiliary sets?
-# sample is linkTo to file-set, donors are calculated -> can removed donors from input file-set
-# write out the path explicity here (by layer)
+# removed modifications, treatments, donors linkTo objs (documents, sources), summary in output_props is probably enough?
+# is 'documents' useful?
+# for the file-set 'paired' with the input file-set (could be either measurement set or auxiliary set), 
+# not doing a secondary query for their linkTo obj for now, just output their accessions
 link_obj_props = {'input_file_sets': ['measurement_sets', 'auxiliary_sets', 'control_for', 'control_file_sets', 'samples', 'library_construction_platform', 'assay_term', 'documents'],
-                  'auxiliary_sets': ['samples', 'library_construction_platform', 'documents'],
-                  'measurement_sets': ['assay_term', 'samples', 'library_construction_platform', 'documents'],
                   'samples': ['sample_terms', 'biomarkers', 'modifications', 'sorted_from', 'part_of', 'donors', 'construct_library_sets', 'treatments', 'originated_from', 'sources', 'multiplexed_samples', 'demultiplexed_from', 'barcode_sample_map', 'targeted_sample_term', 'cell_fate_change_treatments', 'cell_fate_change_protocol'],
-                  'donors': ['phenotypic_features', 'documents', 'sources'],
-                  'modifications': ['tagged_protein', 'documents', 'sources'],
-                  'treatments': ['documents', 'sources'],
                   'files': ['derived_from']
                   }
-
-# didn't go further for samples in sorted_from or part_of for their linkTo objs
-# didn't use it for types other than input_file_sets, samples, files
-# need to rethink how to iterate over all linkTo props
 
 # excluding linkTo props here
 output_props = {'modifications': ['summary'],
@@ -64,7 +52,9 @@ output_props = {'modifications': ['summary'],
                 'sorted_from': ['construct_library_sets'],
                 # should 'part_of' sample output more properties?
                 'files': ['file_format', 'file_size', 'content_type', 'upload_status'],
-                'input_file_sets': ['dbxrefs', 'protocols', 'multiome_size', 'summary']
+                'input_file_sets': ['dbxrefs', 'protocols', 'multiome_size', 'summary'],
+                'auxiliary_sets': ['samples', 'library_construction_platform'],
+                'measurement_sets': ['assay_term', 'samples', 'library_construction_platform']
                 }
 
 
@@ -164,8 +154,6 @@ def get_link_objs_df(query_ids, query_link_obj_props, props_prefix):
     return df
 # set conditional formatting on cell colors
 # this could be optional from args
-
-
 def status_color(x):
     if x == 'released':
         color = 'lightgreen'
@@ -294,8 +282,8 @@ def main():
     print('Writing to excel tables: ' + outfile_prefix + '_metadata.xlsx')
     with pd.ExcelWriter(outfile_prefix + '_metadata.xlsx') as writer:
         for k in sorted(df_all_out.keys()):
-            print(k, len(list(df_all_out[k].columns)))
-            print(df_all_out[k].columns)
+            print('Sheet ' + k, ', Total number of columns: ' + str(len(list(df_all_out[k].columns))))
+            print('Column names: ' + '\n'.join(list(df_all_out[k].columns)))
             df_all_out[k].to_excel(writer, sheet_name=k,
                                    index=False, engine='xlsxwriter')
 
