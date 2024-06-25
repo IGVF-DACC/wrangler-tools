@@ -6,6 +6,7 @@ import pandas as pd
 from collections import defaultdict
 
 # prerequisite libraries:
+# pip install requests
 # pip install pandas
 # pip install openpyxl
 # pip install jinja2
