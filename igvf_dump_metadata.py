@@ -38,7 +38,7 @@ basic_props = ['@id', 'aliases', 'status', 'audit']
 # for the file-set 'paired' with the input file-set (could be either measurement set or auxiliary set),
 # skip a the query for their link sample, just output their ids
 link_obj_props = {'input_file_sets': ['measurement_sets', 'auxiliary_sets', 'control_for', 'control_file_sets', 'samples', 'library_construction_platform', 'assay_term', 'documents'],
-                  'samples': ['sample_terms', 'biomarkers', 'modifications', 'sorted_from', 'part_of', 'donors', 'construct_library_sets', 'treatments', 'originated_from', 'sources', 'multiplexed_samples', 'demultiplexed_from', 'barcode_sample_map', 'targeted_sample_term', 'cell_fate_change_treatments', 'cell_fate_change_protocol'],
+                  'samples': ['sample_terms', 'classifications', 'embryonic', 'disease_terms', 'biomarkers', 'modifications', 'cellular_sub_pool', 'sorted_from', 'part_of', 'donors', 'construct_library_sets', 'treatments', 'originated_from', 'sources', 'multiplexed_samples', 'demultiplexed_from', 'barcode_sample_map', 'targeted_sample_term', 'cell_fate_change_treatments', 'cell_fate_change_protocol'],
                   'files': ['derived_from'],
                   'auxiliary_sets': ['library_construction_platform'],
                   'measurement_sets': ['assay_term', 'library_construction_platform']
@@ -48,6 +48,7 @@ link_obj_props = {'input_file_sets': ['measurement_sets', 'auxiliary_sets', 'con
 # the linkTo props in auxiliary_sets and measurement_sets here only
 output_props = {'modifications': ['summary'],
                 'treatments': ['summary'],
+                'disease_terms': ['term_name'],
                 'samples': ['sorted_from_detail', 'publication_identifiers'],
                 'construct_library_sets': ['summary', 'guide_type', 'guide library'],
                 'donors': ['summary'],
