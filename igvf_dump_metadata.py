@@ -32,17 +32,20 @@ url = 'https://api.data.igvf.org/'
 # set the properties/columns here:
 # any column with all rows = None will be dropped in final tables
 # can add 'summary' to basic_props when it's available for all objs
-basic_props = ['@id', 'accession', 'aliases', 'status', 'audit']
+basic_props = ['@id', 'aliases', 'status', 'audit']
 # removed modifications, treatments, donors linkTo objs (documents, sources), summary in output_props is probably enough?
 # is 'documents' useful?
-# for the file-set 'paired' with the input file-set (could be either measurement set or auxiliary set), 
-# not doing a secondary query for their linkTo obj for now, just output their accessions
+# for the file-set 'paired' with the input file-set (could be either measurement set or auxiliary set),
+# skip a the query for their link sample, just output their ids
 link_obj_props = {'input_file_sets': ['measurement_sets', 'auxiliary_sets', 'control_for', 'control_file_sets', 'samples', 'library_construction_platform', 'assay_term', 'documents'],
                   'samples': ['sample_terms', 'biomarkers', 'modifications', 'sorted_from', 'part_of', 'donors', 'construct_library_sets', 'treatments', 'originated_from', 'sources', 'multiplexed_samples', 'demultiplexed_from', 'barcode_sample_map', 'targeted_sample_term', 'cell_fate_change_treatments', 'cell_fate_change_protocol'],
-                  'files': ['derived_from']
+                  'files': ['derived_from'],
+                  'auxiliary_sets': ['library_construction_platform'],
+                  'measurement_sets': ['assay_term', 'library_construction_platform']
                   }
 
 # excluding linkTo props here
+# the linkTo props in auxiliary_sets and measurement_sets here only
 output_props = {'modifications': ['summary'],
                 'treatments': ['summary'],
                 'samples': ['sorted_from_detail'],
@@ -54,8 +57,6 @@ output_props = {'modifications': ['summary'],
                 # should 'part_of' sample output more properties?
                 'files': ['file_format', 'file_size', 'content_type', 'upload_status'],
                 'input_file_sets': ['dbxrefs', 'protocols', 'multiome_size', 'summary'],
-                'auxiliary_sets': ['samples', 'library_construction_platform'],
-                'measurement_sets': ['assay_term', 'samples', 'library_construction_platform']
                 }
 
 
@@ -153,8 +154,11 @@ def get_link_objs_df(query_ids, query_link_obj_props, props_prefix):
 
     df = pd.DataFrame(query_link_objs_dict)
     return df
+
 # set conditional formatting on cell colors
 # this could be optional from args
+
+
 def status_color(x):
     if x == 'released':
         color = 'lightgreen'
@@ -165,11 +169,11 @@ def status_color(x):
 
     return f'background-color: {color}'
 
+# highlighting the ones with no audits
+
 
 def audit_color(x):
-    if x is None:  # missing audits
-        color = 'red'
-    elif len(x) == 0:
+    if isinstance(x, dict) and len(x) == 0:
         color = 'lightgreen'
     else:
         color = 'white'
@@ -223,13 +227,35 @@ def main():
     df_link = get_link_objs_df(
         input_file_sets_ids, link_obj_props['input_file_sets'], 'input_file_set')
 
-    df_out = output_df([df_0, df_link])
-    df_all_out['input_file_sets'] = df_out
-
     #this is redundant in get_link_objs_df
     input_file_sets_link_ids_dict = get_link_prop_ids_from_ids(
         input_file_sets_ids, link_obj_props['input_file_sets'], 'input_file_set')
+
+    # if there are measurement / auxiliary sets linked to the input file-sets,
+    # add columns for their linkTo obj @ids, but not doing a secondary query to get their props for now
+    df_measurement_link = pd.DataFrame()
+    df_auxiliary_link = pd.DataFrame()
+
+    measurement_ids = input_file_sets_link_ids_dict['input_file_set.measurement_sets.@id']
+    df_measurement_samples_ids = pd.DataFrame(get_link_prop_ids_from_ids(
+        input_file_sets_ids, ['samples'], 'input_file_set.measurement_sets'))
+    if any(v is not None for v in measurement_ids):
+        df_measurement_link = get_link_objs_df(
+            measurement_ids, link_obj_props['measurement_sets'], 'input_file_set.measurement_sets')
+
+    auxiliary_ids = input_file_sets_link_ids_dict['input_file_set.auxiliary_sets.@id']
+    df_auxiliary_samples_ids = pd.DataFrame(get_link_prop_ids_from_ids(
+        auxiliary_ids, ['samples'], 'input_file_set.auxiliary_sets'))
+    if any(v is not None for v in auxiliary_ids):
+        df_auxiliary_link = get_link_objs_df(
+            auxiliary_ids, link_obj_props['auxiliary_sets'], 'input_file_set.auxiliary_sets')
+
+    df_out = output_df([df_0, df_link, df_measurement_samples_ids,
+                       df_measurement_link, df_auxiliary_samples_ids, df_auxiliary_link])
+    df_all_out['input_file_sets'] = df_out
+
     samples_ids = input_file_sets_link_ids_dict['input_file_set.samples.@id']
+
     if any(v is not None for v in samples_ids):
         # samples from input file-sets
         df_sample_link = get_link_objs_df(
@@ -283,7 +309,8 @@ def main():
     print('Writing to excel tables: ' + outfile_prefix + '_metadata.xlsx')
     with pd.ExcelWriter(outfile_prefix + '_metadata.xlsx') as writer:
         for k in sorted(df_all_out.keys()):
-            print('Sheet ' + k, ', Total number of columns: ' + str(len(list(df_all_out[k].columns))))
+            print('Sheet ' + k, ', Total number of columns: ' +
+                  str(len(list(df_all_out[k].columns))))
             print('Column names: ' + '\n'.join(list(df_all_out[k].columns)))
             df_all_out[k].to_excel(writer, sheet_name=k,
                                    index=False, engine='xlsxwriter')
