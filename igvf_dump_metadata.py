@@ -48,7 +48,7 @@ link_obj_props = {'input_file_sets': ['measurement_sets', 'auxiliary_sets', 'con
 # the linkTo props in auxiliary_sets and measurement_sets here only
 output_props = {'modifications': ['summary'],
                 'treatments': ['summary'],
-                'samples': ['sorted_from_detail'],
+                'samples': ['sorted_from_detail', 'publication_identifiers'],
                 'construct_library_sets': ['summary', 'guide_type', 'guide library'],
                 'donors': ['summary'],
                 'assay_term': ['term_name'],
@@ -56,7 +56,7 @@ output_props = {'modifications': ['summary'],
                 'sorted_from': ['construct_library_sets'],
                 # should 'part_of' sample output more properties?
                 'files': ['file_format', 'file_size', 'content_type', 'upload_status'],
-                'input_file_sets': ['dbxrefs', 'protocols', 'multiome_size', 'summary'],
+                'input_file_sets': ['dbxrefs', 'protocols', 'multiome_size', 'summary', 'publication_identifiers'],
                 }
 
 
