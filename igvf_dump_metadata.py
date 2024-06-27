@@ -62,9 +62,11 @@ output_props = {'modifications': ['summary'],
                 }
 
 # reset empty audits to be None -> the column will be dropped if all rows have empty audits
+
+
 def reset_empty_audits(props_dict):
-    for k,v in props_dict.items():
-        if k.endswith('audit'): # each element in array v can be a list of dicts or a dict
+    for k, v in props_dict.items():
+        if k.endswith('audit'):  # each element in array v can be a list of dicts or a dict
             for index, audit in enumerate(v):
                 if isinstance(audit, list):
                     if all(not a for a in audit):
@@ -72,8 +74,9 @@ def reset_empty_audits(props_dict):
                 else:
                     if not audit:
                         props_dict[k][index] = None
-    
+
     return props_dict
+
 
 def get_props_from_ids(obj_ids, prop_fields, prefix):
     # each obj_id can contain multiple ids, e.g. /modifications/XXX, /modifications/YYY
@@ -179,6 +182,8 @@ def get_link_objs_df(query_ids, query_link_obj_props, props_prefix):
 
 def status_color(x):
     if x == 'released':
+        color = 'lightgreen'
+    elif isinstance(x, list) and all(i == 'released' for i in x):
         color = 'lightgreen'
     elif x == 'in progress':
         color = 'grey'
