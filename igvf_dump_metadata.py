@@ -15,13 +15,13 @@ from collections import defaultdict
 
 parser = argparse.ArgumentParser(
     prog='IGVF Metadata Table',
-    description='Generates meatadata table for a given analysis set'
+    description='Generates meatadata table for a given analysis set or a list of file sets'
 )
 
 parser.add_argument('-a', '--accession', help='accession of one analysis set')
 
 parser.add_argument(
-    '-i', '--infile', help='A file containing a list of measurement set accessions.')
+    '-i', '--infile', help='A file containing a list of measurement set or auxiliary set @ids.')
 
 # api connection setting from environment variables.
 # could add alternative ways
@@ -235,10 +235,13 @@ def main():
         outfile_prefix = args.infile.split('.')[0]
         with open(args.infile, 'r') as f:
             for row in f:
-                # add more format check here
-                if row.startswith('/'):
+                # only accept measurement-sets or auxiliary-sets for now, since it will use linked obj defined in link_obj_props['input_file_sets']
+                if row.startswith('/measurement-sets/') or row.startswith('/auxiliary-sets/'):
                     input_file_sets_ids.append(row.strip().split('\t')[0])
-    # if no files in input, add error output
+    
+    if not input_file_sets_ids:
+        print ('No input file sets found.')
+        return
 
     df_all_out = {}
 
