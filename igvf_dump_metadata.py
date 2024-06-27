@@ -58,9 +58,23 @@ output_props = {'modifications': ['summary'],
                 'sorted_from': ['construct_library_sets'],
                 # should 'part_of' sample output more properties?
                 'files': ['file_format', 'file_size', 'content_type', 'upload_status'],
-                'input_file_sets': ['dbxrefs', 'protocols', 'multiome_size', 'summary', 'publication_identifiers'],
+                'input_file_sets': ['dbxrefs', 'protocols', 'multiome_size', 'summary', 'publication_identifiers']
                 }
 
+# reset empty audits to be None -> the column will be dropped if all rows have empty audits
+def reset_empty_audits(props_dict):
+    for k,v in props_dict.items():
+        if k.endswith('audit'): # each element in array v can be a list of dicts or a dict
+            print (v)
+            for index, audit in enumerate(v):
+                if isinstance(audit, list):
+                    if all(not a for a in audit):
+                        props_dict[k][index] = None
+                else:
+                    if not audit:
+                        props_dict[k][index] = None
+    
+    return props_dict
 
 def get_props_from_ids(obj_ids, prop_fields, prefix):
     # each obj_id can contain multiple ids, e.g. /modifications/XXX, /modifications/YYY
@@ -97,7 +111,10 @@ def get_props_from_ids(obj_ids, prop_fields, prefix):
                     p_list.append(obj_json.get(p))
                 props_dict[prefix + '.' + p].append(p_list)
 
+    props_dict = reset_empty_audits(props_dict)
+
     return props_dict
+
 
 # For linkTo objs, do a secondary query with their @ids to get their properties (thus not relying on the embedded properties)
 # this currently doesn't work if obj_id has multiple ids, leave it here for now because we might not want to expand the table too much,
