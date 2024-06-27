@@ -65,7 +65,6 @@ output_props = {'modifications': ['summary'],
 def reset_empty_audits(props_dict):
     for k,v in props_dict.items():
         if k.endswith('audit'): # each element in array v can be a list of dicts or a dict
-            print (v)
             for index, audit in enumerate(v):
                 if isinstance(audit, list):
                     if all(not a for a in audit):
