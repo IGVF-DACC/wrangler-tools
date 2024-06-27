@@ -5,11 +5,8 @@ import requests
 import pandas as pd
 from collections import defaultdict
 
-# prerequisite libraries:
-# pip install requests
-# pip install pandas
-# pip install openpyxl
-# pip install jinja2
+# Install prerequisite libraries:
+# pip install -r metadata_requirements.txt
 
 # You will need to put API credentials in the environment variables: IGVF_API_KEY & IGVF_SECRET_KEY.
 
