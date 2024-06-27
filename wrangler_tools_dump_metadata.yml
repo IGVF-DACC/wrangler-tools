@@ -1,3 +1,4 @@
+# run: conda env create --file wrangler_tools_dump_metadata.yml
 name: wranglerToolsMetadata
 channels:
   - defaults
