@@ -348,6 +348,7 @@ def main():
             force_transition=args.force_transition,
             block_children=args.block_children
         )
+        time.sleep(0.2) #slow this down to max 10 requests per second
 
 
 __doc__ = __doc__.format(
